@@ -7,7 +7,7 @@ import { Plus, Music, Clock, Search, FileAudio, Trash2 } from 'lucide-react';
 
 // 💡 FIX 5: กำหนด URL ของ Backend (Placeholder)
 // **ต้องเปลี่ยน 'https://YOUR-BACKEND-DOMAIN.render.com' เป็น Domain จริงหลัง Deploy Render**
-const BASE_API_URL = 'https://YOUR-BACKEND-DOMAIN.render.com';
+const BASE_API_URL = 'https://thai-music-platform.onrender.com';
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState([]);
