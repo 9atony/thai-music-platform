@@ -375,17 +375,28 @@ function EditorPage() {
     document.body.style.cursor = 'default';
   };
 
-  // แก้ไข handlePlayToggle เพื่อส่ง rowTypes เข้าไปใน playSong
+// 🎯 FIX: แก้ไข handlePlayToggle เพื่อส่ง rowTypes และ onUpdateCurrentCell เข้าไป
   const handlePlayToggle = () => { 
     if(isPlaying){ 
         stopSong(); 
         setIsPlaying(false); 
+        // ✅ FIX 1: หยุด Highlight เมื่อหยุดเล่น
+        setPlaybackCells([]); 
     } else { 
         setIsPlaying(true); 
         const startIndex = (selectedCell.row * 8) + selectedCell.col; 
         
-        // ส่ง rowTypes เข้าไปใน playSong
-        playSong(songData, bpm, rowTypes, () => setIsPlaying(false), startIndex); 
+        // ✅ FIX 2: Callback function สำหรับ Engine เพื่ออัปเดตตำแหน่ง Highlight
+        const updateHighlight = (cellsToHighlight) => {
+            setPlaybackCells(cellsToHighlight);
+        };
+
+        // ส่ง rowTypes และ updateHighlight เข้าไปใน playSong
+        playSong(songData, bpm, rowTypes, () => {
+            // เมื่อเล่นจบ
+            setIsPlaying(false);
+            setPlaybackCells([]);
+        }, updateHighlight, startIndex); // ✅ ส่ง updateHighlight
     } 
   };
   
