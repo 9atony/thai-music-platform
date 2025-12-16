@@ -1,11 +1,12 @@
-// src/utils/audioEngine.js (ฉบับแก้ไข: ใช้ AudioContext Timing สำหรับ BPM ที่แม่นยำ)
+// src/utils/audioEngine.js (ฉบับแก้ไข: Continuous Play และ Pair Mode Playback)
 import { INSTRUMENTS } from './instruments';
 
 let audioCtx = null;
 let currentInstrumentId = 'kongwong'; 
 let soundBuffers = {}; 
 let isPlaying = false;
-let timeoutIds = []; // ยังเก็บ setTimeout สำหรับ Logic การจบเพลง
+let currentTimeoutId = null; // ใช้สำหรับหยุดการเล่นต่อเนื่อง
+let currentNoteIndex = 0; // ติดตามโน้ตตัวที่กำลังเล่น
 
 const CHAR_MAP = {
     'ด': 'd', 'ร': 'r', 'ม': 'm', 'ฟ': 'f', 'ซ': 's', 'ล': 'l', 'ท': 't'
@@ -69,7 +70,6 @@ export const loadInstrumentSounds = async (instrumentId) => {
     console.log(`Loaded ${instrumentId} complete.`);
 };
 
-// 💡 NEW: ฟังก์ชันเล่นเสียงที่แม่นยำด้วย Web Audio API
 const playBufferAtTime = (fileName, time) => {
     if (!audioCtx) return;
 
@@ -90,13 +90,12 @@ const playBufferAtTime = (fileName, time) => {
 export const playNote = (noteChar, time = 0) => {
     const fileName = getFileName(noteChar);
     if (fileName) {
-        // ใช้ฟังก์ชันใหม่ในการเล่นเสียง
         playBufferAtTime(fileName, time);
     }
 };
 
-// ✅ ฟังก์ชันเล่นเพลง (ใช้ AudioContext Time)
-export const playSong = async (songData, bpm = 120, onComplete, startIndex = 0) => {
+// 💡 NEW: ฟังก์ชันเล่นโน้ตแบบต่อเนื่อง
+export const playSong = async (songData, bpm = 120, rowTypes, onComplete, startIndex = 0) => {
     if (isPlaying) stopSong();
     
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -107,83 +106,120 @@ export const playSong = async (songData, bpm = 120, onComplete, startIndex = 0) 
     }
 
     isPlaying = true;
+    currentNoteIndex = startIndex; // เริ่มจาก index ที่กำหนด
     
-    // ✅ เวลาต่อ 1 ช่อง (1 จังหวะ) หน่วยเป็นวินาที (สำหรับ AudioContext Time)
+    // เวลาต่อ 1 ช่อง (1 จังหวะ) หน่วยเป็นวินาที
     const timePerCell = 60 / bpm; 
+    const totalCells = songData.reduce((acc, row) => acc + row.length, 0);
 
-    // 1. แปลงข้อมูลทั้งหมดเป็นเส้นตรง (1D Array)
+    // 1. แปลงข้อมูลทั้งหมดเป็นเส้นตรง (1D Array) - ยังคงจำเป็น
     let allCells = [];
     songData.forEach(row => row.forEach(cell => allCells.push(cell)));
 
-    // 2. หา "โน้ตตัวสุดท้ายจริงๆ" (Logic เดิมยังคงใช้งานได้)
-    let absoluteLastNoteIndex = -1;
-    for (let i = allCells.length - 1; i >= 0; i--) {
-        if (allCells[i] && allCells[i].trim() !== '') {
-            absoluteLastNoteIndex = i;
-            break;
+    const internalPlayLoop = () => {
+        if (!isPlaying) return;
+
+        // 💡 ตรวจสอบจุดจบ: ถ้าเล่นจนจบ Array แล้ว ให้วนกลับไปเริ่มต้น
+        if (currentNoteIndex >= totalCells) {
+            currentNoteIndex = 0;
+            // ถ้าไม่ต้องการวน ให้ใส่ if (onComplete) onComplete(); return;
+            // แต่โจทย์ต้องการเล่นไปเรื่อยๆ
         }
-    }
 
-    let stopIndex = allCells.length - 1; 
-    if (absoluteLastNoteIndex !== -1) {
-        const rowOfLastNote = Math.floor(absoluteLastNoteIndex / 8);
-        const endOfRowIndex = (rowOfLastNote * 8) + 7;
-        stopIndex = endOfRowIndex;
-    } else {
-        if (onComplete) onComplete();
-        isPlaying = false;
-        return;
-    }
+        const currentCellIndex = currentNoteIndex;
+        const rowIndex = Math.floor(currentCellIndex / 8);
+        const colIndex = currentCellIndex % 8;
 
-    if (startIndex > stopIndex) {
-        if (onComplete) onComplete();
-        isPlaying = false;
-        return;
-    }
+        const cellText = allCells[currentCellIndex];
+        const isPairBottom = rowTypes[rowIndex] === 'pair_bottom';
+        const isPairTop = rowTypes[rowIndex] === 'pair_top';
 
-    const cellsToPlay = allCells.slice(startIndex, stopIndex + 1);
+        // 🎯 Logic เล่นโน้ตพร้อมกัน (Pair Mode)
+        if (isPairTop) {
+            // โน้ตมือบน (Row Top)
+            if (cellText && cellText !== '') {
+                // ... (Logic เดิมของการแยกโน้ตย่อย)
+                const notesInCell = cellText.match(/([ก-ฮ][\u0E3A\u0E4D]?)|-/g) || [];
+                const noteCount = notesInCell.length;
+                
+                if (noteCount > 0) {
+                    const timePerNote = timePerCell / noteCount;
+                    const startTime = audioCtx.currentTime;
 
-    // 💡 currentTime คือตำแหน่งเวลาในการเล่นเพลง หน่วยเป็นวินาที
-    let currentTime = 0;
-    const startTime = audioCtx.currentTime; // เวลาเริ่มต้นจริง ๆ ใน Web Audio API
-
-    cellsToPlay.forEach((cellText, cellIndex) => {
-        if (cellText && cellText !== '') {
-             // Logic แยกโน้ตและขีด (-)
-             const notesInCell = cellText.match(/([ก-ฮ][\u0E3A\u0E4D]?)|-/g) || [];
-             const noteCount = notesInCell.length;
-
-             if (noteCount > 0) {
-                 // เวลาต่อโน้ตย่อยใน 1 ช่อง (หน่วยเป็นวินาที)
-                 const timePerNote = timePerCell / noteCount; 
-                 
-                 notesInCell.forEach((note, noteIndex) => {
-                     if (note !== '-') {
-                        // 🎯 กำหนดเวลาเล่น: เวลาเริ่มต้น + เวลา ณ ช่องปัจจุบัน + (เวลาโน้ตย่อย * ลำดับโน้ตย่อย)
-                        const playTime = startTime + currentTime + (noteIndex * timePerNote);
-                        playNote(note, playTime); 
+                    notesInCell.forEach((note, noteIndex) => {
+                         if (note !== '-') {
+                            // เล่นโน้ตมือบน
+                            playNote(note, (noteIndex * timePerNote)); 
+                         }
+                    });
+                }
+            }
+            
+            // 💡 เล่นโน้ตมือล่าง (Row Bottom) พร้อมกัน
+            const bottomRowIndex = rowIndex + 1;
+            if (bottomRowIndex < songData.length && rowTypes[bottomRowIndex] === 'pair_bottom') {
+                const bottomCellText = songData[bottomRowIndex][colIndex];
+                
+                if (bottomCellText && bottomCellText !== '') {
+                     // ... (Logic เดิมของการแยกโน้ตย่อย)
+                     const notesInCell = bottomCellText.match(/([ก-ฮ][\u0E3A\u0E4D]?)|-/g) || [];
+                     const noteCount = notesInCell.length;
+                     
+                     if (noteCount > 0) {
+                         const timePerNote = timePerCell / noteCount;
+                         
+                         notesInCell.forEach((note, noteIndex) => {
+                             if (note !== '-') {
+                                // เล่นโน้ตมือล่าง
+                                playNote(note, (noteIndex * timePerNote)); 
+                             }
+                         });
                      }
-                 });
+                }
+            }
+            
+            // 💡 ถ้าเป็น Row Top ต้องข้าม Row Bottom ไปเลย
+            currentNoteIndex += 8; // ข้ามไป Row ถัดไป (ซึ่งคือ Row Top ตัวต่อไป)
+
+        } else if (isPairBottom) {
+            // โน้ตมือล่าง จะถูกข้ามไปในรอบ Row Top แล้ว
+             currentNoteIndex += 1; // ข้ามช่องนี้ไป
+
+        } else {
+             // โน้ตบรรทัดเดียว (Single) - Logic เดิม
+             if (cellText && cellText !== '') {
+                 const notesInCell = cellText.match(/([ก-ฮ][\u0E3A\u0E4D]?)|-/g) || [];
+                 const noteCount = notesInCell.length;
+
+                 if (noteCount > 0) {
+                     const timePerNote = timePerCell / noteCount;
+                     const startTime = audioCtx.currentTime;
+
+                     notesInCell.forEach((note, noteIndex) => {
+                         if (note !== '-') {
+                            playNote(note, (noteIndex * timePerNote)); 
+                         }
+                     });
+                 }
              }
+             currentNoteIndex += 1;
         }
-        
-        // เลื่อนเวลาไปที่ช่องถัดไป
-        currentTime += timePerCell;
-    });
-    
-    // 5. Logic จบเพลง: ใช้ setTimeout ในการเรียก onComplete
-    // ต้องรอจนจบช่องสุดท้าย (currentTime คือระยะเวลาทั้งหมดของการเล่น)
-    timeoutIds.push(setTimeout(() => { 
-        if (onComplete) onComplete(); 
-        isPlaying = false; 
-    }, currentTime * 1000)); // แปลงวินาทีเป็นมิลลิวินาที
+
+
+        // 💡 กำหนดเวลาสำหรับ Loop ถัดไป (ใช้ setTimeout ในการหน่วงเวลา)
+        // ต้องคูณ 1000 เพื่อแปลงวินาทีเป็นมิลลิวินาที
+        currentTimeoutId = setTimeout(internalPlayLoop, timePerCell * 1000);
+    };
+
+    // เริ่ม Loop
+    internalPlayLoop();
 };
 
 export const stopSong = () => {
     isPlaying = false;
-    timeoutIds.forEach(id => clearTimeout(id));
-    timeoutIds = [];
-    // อาจจะต้องมี logic หยุด Web Audio API sources ด้วยถ้าจำเป็น
+    if (currentTimeoutId) clearTimeout(currentTimeoutId);
+    currentTimeoutId = null;
+    currentNoteIndex = 0; // รีเซ็ตตำแหน่งการเล่น
 };
 
 export const changeInstrument = async (instId) => {

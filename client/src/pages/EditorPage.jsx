@@ -1,4 +1,4 @@
-// src/pages/EditorPage.jsx (ฉบับแก้ไข: กำหนด BPM Min/Max/Default)
+// src/pages/EditorPage.jsx (ฉบับแก้ไข: ส่ง rowTypes เพื่อเปิดใช้งาน Continuous & Pair Mode Playback)
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -195,7 +195,7 @@ function EditorPage() {
       setSongData(n); 
   };
 
-  // ✅ Room Operations (เพิ่มใหม่)
+  // ✅ Room Operations 
   const handleInsertRoom = () => {
     if (!songData[selectedCell.row]) return;
     addToHistory();
@@ -335,8 +335,18 @@ function EditorPage() {
     document.body.style.cursor = 'default';
   };
 
+  // 🎯 FIX 8: แก้ไข handlePlayToggle เพื่อส่ง rowTypes เข้าไปใน playSong
   const handlePlayToggle = () => { 
-    if(isPlaying){ stopSong(); setIsPlaying(false); } else { setIsPlaying(true); const startIndex = (selectedCell.row * 8) + selectedCell.col; playSong(songData, bpm, () => setIsPlaying(false), startIndex); } 
+    if(isPlaying){ 
+        stopSong(); 
+        setIsPlaying(false); 
+    } else { 
+        setIsPlaying(true); 
+        const startIndex = (selectedCell.row * 8) + selectedCell.col; 
+        
+        // ส่ง rowTypes เข้าไปใน playSong
+        playSong(songData, bpm, rowTypes, () => setIsPlaying(false), startIndex); 
+    } 
   };
   
   return (
