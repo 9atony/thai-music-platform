@@ -11,6 +11,9 @@ import jsPDF from 'jspdf';
 import { INSTRUMENTS } from '../utils/instruments';
 import { playSong, stopSong, loadInstrumentSounds, playNote, changeInstrument } from '../utils/audioEngine';
 
+// ✅ เพิ่ม BASE_API_URL เหมือนกับ DashboardPage.jsx
+const BASE_API_URL = 'https://thai-music-platform.onrender.com';
+
 const handlePDF = async () => {
     const pages = document.querySelectorAll('.sheet-page');
     if (pages.length === 0) {
@@ -85,7 +88,8 @@ function EditorPage() {
   useEffect(() => {
     if (id) {
         setIsLoading(true);
-        fetch(`http://localhost:3001/api/project/${id}`)
+        // ✅ แก้ไข: เปลี่ยนจาก localhost เป็น BASE_API_URL (Render Domain)
+        fetch(`${BASE_API_URL}/api/project/${id}`)
             .then(res => res.json())
             .then(async (project) => {
                 if (!project || project.error) return;
@@ -125,7 +129,8 @@ function EditorPage() {
         rowTypes: rowTypes
     };
     try {
-        const res = await fetch(`http://localhost:3001/api/project/${id}`, {
+        // ✅ แก้ไข: เปลี่ยนจาก localhost เป็น BASE_API_URL (Render Domain)
+        const res = await fetch(`${BASE_API_URL}/api/project/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
