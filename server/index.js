@@ -1,4 +1,4 @@
-// server/index.js
+// server/index.js (ฉบับแก้ไข: เพิ่ม Route /api/admin/projects)
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -6,8 +6,6 @@ require('dotenv').config();
 
 const app = express();
 
-// ✅ FIX 1: อัปเดต CORS เพื่อรองรับ Domain จริงของ Netlify
-// เมื่อ Deploy Frontend บน Netlify จะใช้ '*' ได้ หรือระบุ Netlify Domain ที่แน่นอน
 app.use(cors({
     origin: '*', 
     methods: ['GET', 'POST', 'PUT', 'DELETE'] 
@@ -20,7 +18,6 @@ app.get('/', (req, res) => {
 });
 
 // --- เชื่อมต่อ MongoDB ---
-// 💡 FIX 2: เปลี่ยนมาใช้ Environment Variable เพื่อความปลอดภัยในการ Deploy
 const MONGODB_URI = process.env.MONGODB_URI; 
 
 mongoose.connect(MONGODB_URI)
@@ -94,11 +91,22 @@ app.get('/api/projects/:uid', async (req, res) => {
     }
 });
 
-// B2. ดึงข้อมูล User ทั้งหมด (ใช้ใน Dashboard เพื่อดึงชื่อตัวเอง)
+// B2. ดึงข้อมูล User ทั้งหมด (ใช้ใน Dashboard และ Admin)
 app.get('/api/admin/users', async (req, res) => {
     try {
         const users = await UserModel.find({});
         res.json(users);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ✅ NEW: B3. ดึงข้อมูล Project ทั้งหมด (ใช้ใน Admin Panel)
+app.get('/api/admin/projects', async (req, res) => {
+    try {
+        // ดึง Project ทั้งหมด และเรียงตามการอัปเดตล่าสุด
+        const projects = await ProjectModel.find({}).sort({ updatedAt: -1 });
+        res.json(projects);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
