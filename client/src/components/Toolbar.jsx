@@ -1,4 +1,4 @@
-// src/components/Toolbar.jsx
+// src/components/Toolbar.jsx (ฉบับแก้ไข: BPM Min=20 และใช้ setBpm Prop)
 import React from 'react';
 import { 
   FileUp, FileDown, FilePlus, 
@@ -6,13 +6,13 @@ import {
   ChevronsRight, Type,
   Play, Square, Plus, Minus, 
   Undo2, Redo2,
-  ArrowRightFromLine, ArrowLeftFromLine, // ไอคอนห้อง
-  AlignJustify // ไอคอนบรรทัด
+  ArrowRightFromLine, ArrowLeftFromLine, 
+  AlignJustify 
 } from 'lucide-react';
 
 const Toolbar = ({ 
   autoAdvance, setAutoAdvance, 
-  bpm, setBpm, 
+  bpm, setBpm, // setBpm ในที่นี้คือ handleBpmChange จาก EditorPage
   onNew, onSave, onOpen, onPDF, 
   onClearAll,
   instruments, currentInst, onInstrumentChange, isLoading,
@@ -20,7 +20,7 @@ const Toolbar = ({
   isPlaying, onPlayToggle, onAddRow,
   currentFont, onFontChange,
   onDeleteRow, onUndo, onRedo, canUndo, canRedo,
-  onInsertRoom, onDeleteRoom // ✅ รับ Props ใหม่
+  onInsertRoom, onDeleteRoom 
 }) => {
   return (
     <div className="w-full bg-white border-b border-gray-200 px-4 py-2 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 font-['Prompt'] z-40 relative">
@@ -59,7 +59,15 @@ const Toolbar = ({
                 <label className="text-[10px] text-gray-400 font-bold uppercase">TEMPO</label>
                 <span className="text-xs font-bold text-[#A67B5B]">{bpm}</span>
              </div>
-             <input type="range" min="60" max="200" value={bpm} onChange={(e) => setBpm(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#A67B5B]"/>
+             {/* 🎯 FIX 1: แก้ min เป็น 20 และเรียก setBpm ที่มาจาก Props */}
+             <input 
+                type="range" 
+                min="20" // <-- แก้ไขที่นี่
+                max="200" 
+                value={bpm} 
+                onChange={(e) => setBpm(e.target.value)} // setBpm คือ handleBpmChange ที่มี logic min/max
+                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#A67B5B]"
+            />
         </div>
       </div>
 
