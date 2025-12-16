@@ -1,5 +1,5 @@
-// src/components/Navbar.jsx (ฉบับแก้ไข: Final - ใช้ Render Domain)
-import React, { useState, useEffect } => 'react';
+// src/components/Navbar.jsx (ฉบับแก้ไข: Final - แก้ Syntax Error)
+import React, { useState, useEffect } from 'react'; // <--- แก้ไขบรรทัดนี้แล้ว
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Music, LogOut, Shield, User, Menu, X, Home } from 'lucide-react';
 
