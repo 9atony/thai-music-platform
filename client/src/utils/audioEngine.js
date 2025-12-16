@@ -1,11 +1,11 @@
-// src/utils/audioEngine.js
+// src/utils/audioEngine.js (ฉบับแก้ไข: ใช้ AudioContext Timing สำหรับ BPM ที่แม่นยำ)
 import { INSTRUMENTS } from './instruments';
 
 let audioCtx = null;
 let currentInstrumentId = 'kongwong'; 
 let soundBuffers = {}; 
 let isPlaying = false;
-let timeoutIds = [];
+let timeoutIds = []; // ยังเก็บ setTimeout สำหรับ Logic การจบเพลง
 
 const CHAR_MAP = {
     'ด': 'd', 'ร': 'r', 'ม': 'm', 'ฟ': 'f', 'ซ': 's', 'ล': 'l', 'ท': 't'
@@ -69,9 +69,9 @@ export const loadInstrumentSounds = async (instrumentId) => {
     console.log(`Loaded ${instrumentId} complete.`);
 };
 
-const playBuffer = (fileName) => {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+// 💡 NEW: ฟังก์ชันเล่นเสียงที่แม่นยำด้วย Web Audio API
+const playBufferAtTime = (fileName, time) => {
+    if (!audioCtx) return;
 
     const buffers = soundBuffers[currentInstrumentId];
     if (buffers && buffers[fileName]) {
@@ -81,63 +81,60 @@ const playBuffer = (fileName) => {
         gainNode.gain.value = 1.0;
         source.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        source.start(0);
+        
+        // 🎯 กำหนดเวลาเล่นเสียงที่แน่นอน: audioCtx.currentTime + time
+        source.start(audioCtx.currentTime + time);
     }
 };
 
-export const playNote = (noteChar) => {
+export const playNote = (noteChar, time = 0) => {
     const fileName = getFileName(noteChar);
     if (fileName) {
-        playBuffer(fileName);
+        // ใช้ฟังก์ชันใหม่ในการเล่นเสียง
+        playBufferAtTime(fileName, time);
     }
 };
 
-// ✅ ฟังก์ชันเล่นเพลง (ปรับปรุง Logic การจบเพลง)
+// ✅ ฟังก์ชันเล่นเพลง (ใช้ AudioContext Time)
 export const playSong = async (songData, bpm = 120, onComplete, startIndex = 0) => {
     if (isPlaying) stopSong();
+    
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     
     if (!soundBuffers[currentInstrumentId]) {
         await loadInstrumentSounds(currentInstrumentId);
     }
 
     isPlaying = true;
-    const delayPerCell = (60 / bpm) * 1000; 
+    
+    // ✅ เวลาต่อ 1 ช่อง (1 จังหวะ) หน่วยเป็นวินาที (สำหรับ AudioContext Time)
+    const timePerCell = 60 / bpm; 
 
     // 1. แปลงข้อมูลทั้งหมดเป็นเส้นตรง (1D Array)
     let allCells = [];
     songData.forEach(row => row.forEach(cell => allCells.push(cell)));
 
-    // 2. หา "โน้ตตัวสุดท้ายจริงๆ" ของทั้งเพลงอยู่ตรงไหน?
+    // 2. หา "โน้ตตัวสุดท้ายจริงๆ" (Logic เดิมยังคงใช้งานได้)
     let absoluteLastNoteIndex = -1;
     for (let i = allCells.length - 1; i >= 0; i--) {
-        // เช็คว่ามีตัวอักษรและไม่ใช่ช่องว่าง
         if (allCells[i] && allCells[i].trim() !== '') {
             absoluteLastNoteIndex = i;
             break;
         }
     }
 
-    // 3. คำนวณ "จุดจบของบรรทัดนั้น" (End of Row)
-    // 1 บรรทัดมี 8 ห้อง
-    let stopIndex = allCells.length - 1; // ค่าเริ่มต้นคือจบเพลง
-
+    let stopIndex = allCells.length - 1; 
     if (absoluteLastNoteIndex !== -1) {
-        // หาว่าโน้ตตัวสุดท้ายอยู่บรรทัดที่เท่าไหร่ (0-7, 8-15, ...)
         const rowOfLastNote = Math.floor(absoluteLastNoteIndex / 8);
-        
-        // จุดจบของบรรทัดนั้น คือ (เลขบรรทัด * 8) + 7
         const endOfRowIndex = (rowOfLastNote * 8) + 7;
-        
         stopIndex = endOfRowIndex;
     } else {
-        // เพลงว่างเปล่า
         if (onComplete) onComplete();
         isPlaying = false;
         return;
     }
 
-    // 4. ตัดเอาเฉพาะช่วงที่ต้องเล่น (จาก Start -> จบบรรทัดสุดท้ายที่มีโน้ต)
-    // ตรวจสอบว่า startIndex เกินจุดจบหรือยัง
     if (startIndex > stopIndex) {
         if (onComplete) onComplete();
         isPlaying = false;
@@ -146,9 +143,10 @@ export const playSong = async (songData, bpm = 120, onComplete, startIndex = 0) 
 
     const cellsToPlay = allCells.slice(startIndex, stopIndex + 1);
 
+    // 💡 currentTime คือตำแหน่งเวลาในการเล่นเพลง หน่วยเป็นวินาที
     let currentTime = 0;
-    
-    // วนลูปเล่น
+    const startTime = audioCtx.currentTime; // เวลาเริ่มต้นจริง ๆ ใน Web Audio API
+
     cellsToPlay.forEach((cellText, cellIndex) => {
         if (cellText && cellText !== '') {
              // Logic แยกโน้ตและขีด (-)
@@ -156,33 +154,36 @@ export const playSong = async (songData, bpm = 120, onComplete, startIndex = 0) 
              const noteCount = notesInCell.length;
 
              if (noteCount > 0) {
-                 const timePerNote = delayPerCell / noteCount;
+                 // เวลาต่อโน้ตย่อยใน 1 ช่อง (หน่วยเป็นวินาที)
+                 const timePerNote = timePerCell / noteCount; 
+                 
                  notesInCell.forEach((note, noteIndex) => {
                      if (note !== '-') {
-                        timeoutIds.push(setTimeout(() => { 
-                            if(isPlaying) playNote(note); 
-                        }, currentTime + (noteIndex * timePerNote)));
+                        // 🎯 กำหนดเวลาเล่น: เวลาเริ่มต้น + เวลา ณ ช่องปัจจุบัน + (เวลาโน้ตย่อย * ลำดับโน้ตย่อย)
+                        const playTime = startTime + currentTime + (noteIndex * timePerNote);
+                        playNote(note, playTime); 
                      }
                  });
              }
         }
         
-        // เช็คจบการทำงาน
-        if (cellIndex === cellsToPlay.length - 1) {
-           timeoutIds.push(setTimeout(() => { 
-               if (onComplete) onComplete(); 
-               isPlaying = false; 
-           }, currentTime + delayPerCell)); // รอจนจบห้องสุดท้ายแล้วค่อยหยุด
-        }
-        
-        currentTime += delayPerCell;
+        // เลื่อนเวลาไปที่ช่องถัดไป
+        currentTime += timePerCell;
     });
+    
+    // 5. Logic จบเพลง: ใช้ setTimeout ในการเรียก onComplete
+    // ต้องรอจนจบช่องสุดท้าย (currentTime คือระยะเวลาทั้งหมดของการเล่น)
+    timeoutIds.push(setTimeout(() => { 
+        if (onComplete) onComplete(); 
+        isPlaying = false; 
+    }, currentTime * 1000)); // แปลงวินาทีเป็นมิลลิวินาที
 };
 
 export const stopSong = () => {
     isPlaying = false;
     timeoutIds.forEach(id => clearTimeout(id));
     timeoutIds = [];
+    // อาจจะต้องมี logic หยุด Web Audio API sources ด้วยถ้าจำเป็น
 };
 
 export const changeInstrument = async (instId) => {
