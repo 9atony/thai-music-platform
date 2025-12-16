@@ -1,20 +1,23 @@
-// src/components/Sheet.jsx (ฉบับแก้ไข: Final Fix - รับและแสดง Playback Highlight)
+// src/components/Sheet.jsx
 import React from 'react';
 
-// 🎯 FIX 1: รับ Prop ใหม่: playbackCells
-const Sheet = ({ data, rowTypes, selectedCell, onCellClick, metaData, onMetaChange, currentFont, playbackCells = [] }) => {
+const Sheet = ({ data, rowTypes, selectedCell, onCellClick, metaData, onMetaChange, currentFont }) => {
   
   const isFormal = currentFont.includes('Sarabun');
   const ROWS_FIRST_PAGE = 10;
   const ROWS_OTHER_PAGES = 13;
 
-  // --- ฟังก์ชันแบ่งข้อมูลเป็นหน้าๆ (Pagination Logic) ---
+  // src/components/Sheet.jsx
+
+// ... (ส่วน import และ const ROWS_... เหมือนเดิม) ...
+
+  // --- ฟังก์ชันแบ่งข้อมูลเป็นหน้าๆ (Pagination Logic) ฉบับแก้ไข ---
   const getPages = () => {
     const pages = [];
     let currentRowIndex = 0;
     let pageCount = 1;
 
-    // ... (Logic แบ่งหน้า) ...
+    // เราจะใช้ rowTypes ในการกำหนดว่าแถวถัดไปควรขยับไปกี่ขั้น
     while (currentRowIndex < data.length) {
       const capacity = pageCount === 1 ? ROWS_FIRST_PAGE : ROWS_OTHER_PAGES;
       
@@ -77,12 +80,8 @@ const Sheet = ({ data, rowTypes, selectedCell, onCellClick, metaData, onMetaChan
     return pages;
   };
   
-  // 🎯 FIX 2: ฟังก์ชันเช็ค Highlight การเล่น
-  const isPlaybackHighlighted = (row, col) => {
-    // ตรวจสอบว่าตำแหน่ง (row, col) อยู่ใน array playbackCells หรือไม่
-    return playbackCells.some(cell => cell.row === row && cell.col === col);
-  };
-  
+// ... (โค้ดส่วนอื่นของ Sheet.jsx เหมือนเดิม) ...
+
   const pages = getPages();
 
   const renderRow = (localIndex, rowData, startIndex, isPair = false, pairPosition = null) => {
@@ -109,9 +108,6 @@ const Sheet = ({ data, rowTypes, selectedCell, onCellClick, metaData, onMetaChan
         {rowData.map((cellData, colIndex) => {
           const isActive = selectedCell.row === realIndex && selectedCell.col === colIndex;
           
-          // 🎯 FIX 3: ตรวจสอบว่า Cell นี้ถูก Highlight ในโหมดเล่นเพลงหรือไม่
-          const isPlaying = isPlaybackHighlighted(realIndex, colIndex);
-
           return (
             <div 
               key={colIndex}
@@ -119,14 +115,13 @@ const Sheet = ({ data, rowTypes, selectedCell, onCellClick, metaData, onMetaChan
               className={`
                 relative border-r border-b border-gray-300 flex items-center justify-center cursor-text transition-all select-none
                 ${isActive ? 'bg-[#A67B5B]/10 ring-2 ring-[#A67B5B] z-10' : 'hover:bg-gray-50'}
-                ${isPlaying ? 'bg-yellow-100/70 border-yellow-400 ring-2 ring-yellow-400 z-20' : ''} /* 🎯 Highlight Class */
-                h-10 
+                h-10 /* ความสูงคงที่ */
               `}
             >
               <span className={`
                 ${currentFont} 
-                font-normal     
-                text-base        
+                font-normal      /* ไม่หนา (Normal Weight) ทั้งคู่ */
+                text-base        /* ขนาด 16px (Base) ทั้งคู่ */
                 text-gray-800 
                 leading-[2.5] pt-1 pb-1 block w-full text-center
               `}>

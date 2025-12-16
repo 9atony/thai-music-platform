@@ -1,4 +1,4 @@
-// src/pages/EditorPage.jsx (ฉบับแก้ไข: Final Fix - เพิ่ม State PlaybackCells และ Logic Highlight)
+// src/pages/EditorPage.jsx (ฉบับแก้ไข: ลบโน้ตรวม + เลื่อน Cursor ย้อนหลัง)
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -29,9 +29,6 @@ function EditorPage() {
   const [bpm, setBpm] = useState(60); 
   
   const [isPlaying, setIsPlaying] = useState(false);
-  // 🎯 FIX 1: เพิ่ม State ที่ขาดหายไป! (แก้ไข ReferenceError)
-  const [playbackCells, setPlaybackCells] = useState([]); 
-  
   const [pitchLevel, setPitchLevel] = useState('mid'); 
   const [currentInst, setCurrentInst] = useState('kongwong'); 
   const [isLoading, setIsLoading] = useState(false); 
@@ -180,7 +177,7 @@ function EditorPage() {
     }
   };
 
-  // NEW/FIXED: Logic การลบโน้ตและเลื่อน Cursor ย้อนหลัง
+  // 🎯 NEW/FIXED: Logic การลบโน้ตและเลื่อน Cursor ย้อนหลัง
   const handleDelete = () => { 
     const { row, col } = selectedCell;
     const currentCell = songData[row] ? songData[row][col] : null;
@@ -198,7 +195,7 @@ function EditorPage() {
         const isToneMark = lastChar === '\u0E3A' || lastChar === '\u0E4D';
 
         if (isToneMark && currentCell.length >= 2) { 
-            // FIX: ลบทั้งโน้ตและเครื่องหมาย (2 ตัวอักษร)
+            // 🎯 FIX: ลบทั้งโน้ตและเครื่องหมาย (2 ตัวอักษร)
             updatedText = currentCell.slice(0, -2); 
         } else {
             // ลบ 1 ตัวอักษรสุดท้าย (โน้ตเดี่ยว หรือขีด)
@@ -355,6 +352,7 @@ function EditorPage() {
     // สร้าง PDF A4
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = 210;
+    // const pdfHeight = 297; // ไม่ใช้เพราะ canvas จะกำหนดความสูงเอง
 
     for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
@@ -370,35 +368,24 @@ function EditorPage() {
         const imgData = canvas.toDataURL('image/png');
 
         if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, 0); 
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, 0); // ความสูงเป็น 0 เพื่อให้ jsPDF คำนวณอัตราส่วนเอง
     }
 
     pdf.save(`${metaData.title}.pdf`);
     document.body.style.cursor = 'default';
   };
 
-// 🎯 FIX 2: แก้ไข handlePlayToggle เพื่อส่ง Callback Highlight และล้าง State เมื่อหยุด
+  // แก้ไข handlePlayToggle เพื่อส่ง rowTypes เข้าไปใน playSong
   const handlePlayToggle = () => { 
     if(isPlaying){ 
         stopSong(); 
         setIsPlaying(false); 
-        // 🚨 FIX 3: ล้าง Highlight เมื่อหยุดเล่น
-        setPlaybackCells([]); 
     } else { 
         setIsPlaying(true); 
         const startIndex = (selectedCell.row * 8) + selectedCell.col; 
         
-        // 🚨 FIX 4: Callback function สำหรับ Engine เพื่ออัปเดตตำแหน่ง Highlight
-        const updateHighlight = (cellsToHighlight) => {
-            setPlaybackCells(cellsToHighlight);
-        };
-
-        // ส่ง rowTypes และ updateHighlight เข้าไปใน playSong
-        playSong(songData, bpm, rowTypes, () => {
-            // เมื่อเล่นจบ
-            setIsPlaying(false);
-            setPlaybackCells([]);
-        }, updateHighlight, startIndex); // ✅ ส่ง updateHighlight
+        // ส่ง rowTypes เข้าไปใน playSong
+        playSong(songData, bpm, rowTypes, () => setIsPlaying(false), startIndex); 
     } 
   };
   
@@ -428,17 +415,7 @@ function EditorPage() {
               {saveStatus === 'unsaved' && "✏️ ..."}
           </div>
           <div className="w-full flex justify-center pb-32 pt-8">
-               {/* 🎯 FIX 5: ส่ง State Highlight ไปที่ Sheet */}
-              <Sheet 
-                  data={songData} 
-                  rowTypes={rowTypes} 
-                  selectedCell={selectedCell} 
-                  onCellClick={handleCellClick} 
-                  metaData={metaData} 
-                  onMetaChange={handleMetaChange} 
-                  currentFont={currentFont}
-                  playbackCells={playbackCells} // ✅ ส่ง State ใหม่
-              />
+              <Sheet data={songData} rowTypes={rowTypes} selectedCell={selectedCell} onCellClick={handleCellClick} metaData={metaData} onMetaChange={handleMetaChange} currentFont={currentFont} />
           </div>
       </div>
       
