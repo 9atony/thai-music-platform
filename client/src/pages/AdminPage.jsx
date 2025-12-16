@@ -1,8 +1,11 @@
-// src/pages/AdminPage.jsx
+// src/pages/AdminPage.jsx (ฉบับแก้ไข: ใช้ Render Domain)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { Users, Music, Trash2, Edit, Search, Shield, AlertCircle } from 'lucide-react';
+
+// ✅ เพิ่ม BASE_API_URL
+const BASE_API_URL = 'https://thai-music-platform.onrender.com';
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -26,7 +29,8 @@ export default function AdminPage() {
     }
 
     try {
-        const res = await fetch('http://localhost:3001/api/admin/users');
+        // 🎯 FIX 1: เปลี่ยนจาก localhost เป็น BASE_API_URL
+        const res = await fetch(`${BASE_API_URL}/api/admin/users`);
         const allUsers = await res.json();
         const me = allUsers.find(u => u.uid === myUid);
         
@@ -34,7 +38,8 @@ export default function AdminPage() {
             setIsAdmin(true);
             // โหลดข้อมูลหลังผ่านการตรวจสิทธิ์
             setUsers(allUsers);
-            const resProj = await fetch('http://localhost:3001/api/admin/projects');
+            // 🎯 FIX 2: เปลี่ยนจาก localhost เป็น BASE_API_URL
+            const resProj = await fetch(`${BASE_API_URL}/api/admin/projects`);
             setProjects(await resProj.json());
         } else {
             alert("⛔️ Access Denied: สำหรับผู้ดูแลระบบเท่านั้น");
@@ -49,16 +54,19 @@ export default function AdminPage() {
   };
 
   const reloadData = async () => {
-      const resUsers = await fetch('http://localhost:3001/api/admin/users');
+      // 🎯 FIX 3: เปลี่ยนจาก localhost เป็น BASE_API_URL
+      const resUsers = await fetch(`${BASE_API_URL}/api/admin/users`);
       setUsers(await resUsers.json());
-      const resProj = await fetch('http://localhost:3001/api/admin/projects');
+      // 🎯 FIX 4: เปลี่ยนจาก localhost เป็น BASE_API_URL
+      const resProj = await fetch(`${BASE_API_URL}/api/admin/projects`);
       setProjects(await resProj.json());
   };
 
   const handleDeleteProject = async (id) => {
     if(!window.confirm("ยืนยันการลบเพลงนี้? (ไม่สามารถกู้คืนได้)")) return;
     try {
-        await fetch(`http://localhost:3001/api/project/${id}`, { method: 'DELETE' });
+        // 🎯 FIX 5: เปลี่ยนจาก localhost เป็น BASE_API_URL
+        await fetch(`${BASE_API_URL}/api/project/${id}`, { method: 'DELETE' });
         reloadData();
     } catch(err) { alert("ลบไม่สำเร็จ"); }
   };
