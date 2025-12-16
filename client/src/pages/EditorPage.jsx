@@ -1,4 +1,4 @@
-// src/pages/EditorPage.jsx
+// src/pages/EditorPage.jsx (ฉบับแก้ไข: กำหนด BPM Min/Max/Default)
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -14,50 +14,6 @@ import { playSong, stopSong, loadInstrumentSounds, playNote, changeInstrument } 
 // ✅ เพิ่ม BASE_API_URL เหมือนกับ DashboardPage.jsx
 const BASE_API_URL = 'https://thai-music-platform.onrender.com';
 
-const handlePDF = async () => {
-    const pages = document.querySelectorAll('.sheet-page');
-    if (pages.length === 0) {
-        alert("ไม่พบหน้ากระดาษ");
-        return;
-    }
-
-    document.body.style.cursor = 'wait';
-    
-    // ตั้งค่า PDF A4
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = 210; // ความกว้าง A4
-    // ❌ ลบ pdfHeight ที่ล็อคตายตัวออก
-
-    for (let i = 0; i < pages.length; i++) {
-        const page = pages[i];
-
-        const canvas = await html2canvas(page, {
-            scale: 2, // เพิ่มความชัด
-            useCORS: true,
-            logging: false,
-            // ✅ บังคับขนาดการถ่ายภาพให้เท่ากับขนาด Element จริง
-            width: page.offsetWidth,
-            height: page.offsetHeight,
-            windowWidth: page.scrollWidth,
-            windowHeight: page.scrollHeight
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        
-        // ✅ คำนวณความสูงตามสัดส่วนจริง (Aspect Ratio) เพื่อไม่ให้ภาพยืด
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-        if (i > 0) pdf.addPage();
-        
-        // วางภาพลงไป (สูงเท่าไหร่ก็เท่านั้น ไม่ดึงยืด)
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    }
-
-    pdf.save(`${metaData.title}.pdf`);
-    document.body.style.cursor = 'default';
-  };
-  
 function EditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -68,7 +24,10 @@ function EditorPage() {
   const [metaData, setMetaData] = useState({ title: "กำลังโหลด...", tempo: "", instrument: "kongwong", composer: "" });
   const [selectedCell, setSelectedCell] = useState({ row: 0, col: 0 });
   const [autoAdvance, setAutoAdvance] = useState(true);
-  const [bpm, setBpm] = useState(120); 
+  
+  // 🎯 FIX 1: ค่าเริ่มต้น BPM (Default) เป็น 60
+  const [bpm, setBpm] = useState(60); 
+  
   const [isPlaying, setIsPlaying] = useState(false);
   const [pitchLevel, setPitchLevel] = useState('mid'); 
   const [currentInst, setCurrentInst] = useState('kongwong'); 
@@ -104,6 +63,8 @@ function EditorPage() {
                         setCurrentInst(inst);
                         await loadInstrumentSounds(inst);
                     }
+                    // 🎯 FIX 2: ดึงค่า BPM ที่บันทึกไว้ ถ้ามี
+                    if (project.meta.bpm) setBpm(project.meta.bpm);
                 }
                 setIsLoading(false);
                 setTimeout(() => { isFirstLoad.current = false; }, 1000);
@@ -118,13 +79,14 @@ function EditorPage() {
     setSaveStatus('unsaved');
     const timeoutId = setTimeout(() => handleSaveToCloud(true), 2000);
     return () => clearTimeout(timeoutId);
-  }, [songData, rowTypes, metaData, currentInst, currentFont]);
+  }, [songData, rowTypes, metaData, currentInst, currentFont, bpm]); // 🎯 FIX 3: เพิ่ม bpm ใน dependency list
 
   const handleSaveToCloud = async (isAuto = false) => {
     if (isAuto) setSaveStatus('saving');
     const payload = {
         title: metaData.title,
-        meta: { ...metaData, instrument: currentInst, font: currentFont },
+        // 🎯 FIX 4: บันทึกค่า BPM ลงใน meta
+        meta: { ...metaData, instrument: currentInst, font: currentFont, bpm: bpm },
         data: songData,
         rowTypes: rowTypes
     };
@@ -166,6 +128,21 @@ function EditorPage() {
     setRowTypes(nextState.rowTypes);
     setFuture(prev => prev.slice(0, -1));
   };
+  
+  // 🎯 FIX 5: ฟังก์ชันควบคุม BPM พร้อม Min/Max
+  const handleBpmChange = (newBpm) => {
+    const minBpm = 20;
+    const maxBpm = 200;
+    let value = parseInt(newBpm, 10);
+    if (isNaN(value)) value = 60; // กลับไป default ถ้าไม่ใช่ตัวเลข
+    
+    // จำกัดค่าให้อยู่ในขอบเขต 20-200
+    if (value < minBpm) value = minBpm;
+    if (value > maxBpm) value = maxBpm;
+    
+    setBpm(value);
+  };
+
 
   // --- Handlers ---
   
@@ -294,6 +271,8 @@ function EditorPage() {
                     setCurrentInst(json.meta.instrument);
                     await loadInstrumentSounds(json.meta.instrument);
                 }
+                // 🎯 FIX 6: ดึงค่า BPM จากไฟล์ที่ Import
+                if (json.meta.bpm) setBpm(json.meta.bpm); 
             }
             alert(`✅ โหลดเพลงเรียบร้อย!`);
         }
@@ -306,7 +285,8 @@ function EditorPage() {
   const handleCellClick = (row, col) => setSelectedCell({ row, col });
   const handleMetaChange = (field, value) => setMetaData(prev => ({ ...prev, [field]: value }));
   const handleExportFile = () => { 
-    const saveObj = { meta: { ...metaData, font: currentFont }, data: songData, rowTypes: rowTypes };
+    // 🎯 FIX 7: บันทึกค่า BPM ลงในไฟล์ JSON ที่ Export
+    const saveObj = { meta: { ...metaData, font: currentFont, bpm: bpm }, data: songData, rowTypes: rowTypes };
     const dataStr = JSON.stringify(saveObj);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -364,7 +344,8 @@ function EditorPage() {
       <Navbar />
       <Toolbar 
           autoAdvance={autoAdvance} setAutoAdvance={setAutoAdvance}
-          bpm={bpm} setBpm={setBpm} 
+          // 🎯 FIX 8: ส่งฟังก์ชัน handleBpmChange ไปยัง Toolbar
+          bpm={bpm} setBpm={handleBpmChange} 
           onNew={handleClearAll} onSave={handleExportFile} onPDF={handlePDF} onClearAll={handleClearAll}
           instruments={INSTRUMENTS} currentInst={currentInst} onInstrumentChange={handleInstrumentChange}
           isLoading={isLoading} isAddPairMode={isAddPairMode} setIsAddPairMode={setIsAddPairMode}
